@@ -1,0 +1,12 @@
+<Solution>
+  <Project Path="AspireApp1.AppHost/AspireApp1.AppHost.csproj" />
+  <Project Path="AspireApp1.ServiceDefaults/AspireApp1.ServiceDefaults.csproj" />
+  <Project Path="AspireApp1.Web/AspireApp1.Web.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="DotNetApi/DotNetApi.csproj" />
+  <Project Path="FastApiService/FastApiService.pyproj" Type="888888a0-9f3d-457c-b088-3a5042f75d52" Id="1b7b71b7-f636-4abc-92a1-37255475e25d">
+    <Build Project="false" />
+  </Project>
+</Solution>

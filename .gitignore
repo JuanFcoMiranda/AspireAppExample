@@ -1,0 +1,148 @@
+############################################
+# General
+############################################
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.old
+*.orig
+*.pid
+*.seed
+.DS_Store
+Thumbs.db
+
+############################################
+# IDEs / Editors
+############################################
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.sln.iml
+*.user
+*.userosscache
+*.suo
+*.ntvs*
+*.njsproj
+*.dbmdl
+
+############################################
+# .NET / C#
+############################################
+bin/
+obj/
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa]ny [Cc]pu/
+
+*.dll
+*.exe
+*.pdb
+*.cache
+*.deps.json
+*.runtimeconfig.json
+
+project.lock.json
+project.fragment.lock.json
+artifacts/
+.vs
+.idea
+
+############################################
+# .NET Aspire
+############################################
+.aspire/
+aspire-manifest.json
+*.aspire.json
+
+############################################
+# NuGet
+############################################
+*.nupkg
+*.snupkg
+.nuget/
+.nuget/packages/
+packages/
+packages.lock.json
+
+############################################
+# ASP.NET / Web
+############################################
+wwwroot/lib/
+appsettings.*.json
+!appsettings.json
+
+############################################
+# Python
+############################################
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Python tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+############################################
+# Node / Vue 3
+############################################
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+dist/
+dist-ssr/
+.vite/
+.cache/
+
+############################################
+# Vue / Frontend tooling
+############################################
+.env
+.env.*
+!.env.example
+
+############################################
+# Docker / Containers
+############################################
+docker-compose.override.yml
+*.env.docker
+*.pid
+
+############################################
+# Logs
+############################################
+logs/
+*.log
+
+############################################
+# OS specific
+############################################
+Desktop.ini
+ehthumbs.db

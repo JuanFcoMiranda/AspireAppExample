@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "DotNetApi": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "launchUrl": "scalar/v1",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:51269;http://localhost:51270"
+    }
+  }
+}
