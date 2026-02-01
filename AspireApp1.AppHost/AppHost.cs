@@ -2,8 +2,6 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-//builder.AddServiceDefaults();
-
 // Obtener el endpoint OTLP del dashboard de Aspire
 // El dashboard de Aspire expone OTLP en el puerto 18889 por defecto cuando se ejecuta desde Visual Studio
 var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] ?? "http://localhost:18889";
@@ -17,7 +15,7 @@ var postgres = builder.AddPostgres("postgres")
     .AddDatabase("aspiredb");
 
 // Proyecto FastAPI
-var python = builder.AddUvicornApp(
+var fastApi = builder.AddUvicornApp(
         name: "fastapi",
         appDirectory: "../FastApiService",
         app: "main:app")
@@ -29,10 +27,13 @@ var python = builder.AddUvicornApp(
 
 // Proyecto .NET API que consume el servicio FastAPI
 var dotnetApi = builder.AddProject<DotNetApi>("dotnet-api")
-    .WithReference(python)
+    .WithReference(fastApi)
     .WithReference(valkey)
     .WithReference(postgres)
-    .WithHttpEndpoint(port: 5001, name: "custom-http");
+    .WithHttpEndpoint(port: 5001, name: "custom-http")
+    .WaitFor(valkey)
+    .WaitFor(postgres)
+    .WaitFor(fastApi);
 
 // Proyecto Vue web que consume la API .NET
 // El endpoint OTLP del dashboard de Aspire está disponible en el puerto 18889
@@ -40,6 +41,7 @@ builder.AddViteApp("web", appDirectory: "../AspireApp1.Web")
     .WithPnpm()
     .WithExternalHttpEndpoints()
     .WithEnvironment("VITE_OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:18889/v1/traces")
-    .WithEnvironment("VITE_API_BASE_URL", dotnetApi.GetEndpoint("custom-http"));
+    .WithEnvironment("VITE_API_BASE_URL", dotnetApi.GetEndpoint("custom-http"))
+    .WaitFor(dotnetApi);
 
 await builder.Build().RunAsync();

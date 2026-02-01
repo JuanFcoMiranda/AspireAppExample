@@ -1,6 +1,6 @@
 using Scalar.AspNetCore;
 using DotNetApi.Data;
-using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,8 +12,10 @@ builder.AddRedisClient("valkey");
 // Añadir PostgreSQL con Entity Framework Core
 builder.AddNpgsqlDbContext<AppDbContext>("aspiredb");
 
-// No configurar BaseAddress, se obtendrá dinámicamente de la configuración
-builder.Services.AddHttpClient("fastapi");
+builder.Services.AddHttpClient("fastapi", client =>
+{
+    client.BaseAddress = new Uri("http+https://fastapi");
+});
 
 builder.Services.AddOpenApi();
 
@@ -46,7 +48,7 @@ app.UseCors("DevLocalhost");
 app.MapOpenApi();
 app.MapScalarApiReference();
 
-app.MapGet("/call-fastapi", async (IHttpClientFactory factory, StackExchange.Redis.IConnectionMultiplexer redis, IConfiguration configuration) =>
+app.MapGet("/call-fastapi", async (IHttpClientFactory factory, IConnectionMultiplexer redis) =>
 {
     var db = redis.GetDatabase();
     var cacheKey = "fastapi:hello-world";
@@ -65,16 +67,9 @@ app.MapGet("/call-fastapi", async (IHttpClientFactory factory, StackExchange.Red
         });
     }
 
-    // Obtener la URL del servicio FastAPI desde la configuración de Aspire
-    // Aspire inyecta las URLs como variables de entorno simples
-    var fastapiUrl = configuration["FASTAPI_HTTP"]; // Primera opción: variable de entorno simple
-
-    // Remover cualquier trailing slash
-    //fastapiUrl = fastapiUrl.TrimEnd('/');
-
     // Si no está en caché, hacer la llamada a FastAPI
     var client = factory.CreateClient("fastapi");
-    var response = await client.GetStringAsync($"{fastapiUrl}/hello-world");
+    var response = await client.GetStringAsync("/hello-world");
 
     // Guardar en caché por 60 segundos
     await db.StringSetAsync(cacheKey, response, TimeSpan.FromSeconds(60));
@@ -85,7 +80,7 @@ app.MapGet("/call-fastapi", async (IHttpClientFactory factory, StackExchange.Red
         fromFastApi = response,
         timestamp = DateTime.UtcNow,
         cached = false,
-        fastapiUrl = fastapiUrl // Añadir para debug
+        fastapiUrl = client.BaseAddress
     });
 })
 .WithName("CallFastAPI")
@@ -94,84 +89,6 @@ app.MapGet("/call-fastapi", async (IHttpClientFactory factory, StackExchange.Red
     // Per-endpoint tweaks
     operation.Summary = "CallFastAPI";
     operation.Description = "Llama al endpoint /hello-world de FastAPI y devuelve la respuesta";
-        return Task.CompletedTask;
-    });
-
-    // Endpoints para TodoItems (CRUD con PostgreSQL)
-    app.MapGet("/todos", async (AppDbContext db) =>
-    {
-        var todos = await db.TodoItems.ToListAsync();
-        return Results.Ok(todos);
-    })
-    .WithName("GetTodos")
-    .AddOpenApiOperationTransformer((operation, context, ct) =>
-    {
-        operation.Summary = "GetTodos";
-        operation.Description = "Obtiene todos los items de la lista de tareas desde PostgreSQL";
-        return Task.CompletedTask;
-    });
-
-    app.MapGet("/todos/{id}", async (int id, AppDbContext db) =>
-    {
-        var todo = await db.TodoItems.FindAsync(id);
-        return todo is not null ? Results.Ok(todo) : Results.NotFound();
-    })
-    .WithName("GetTodoById")
-    .AddOpenApiOperationTransformer((operation, context, ct) =>
-    {
-        operation.Summary = "GetTodoById";
-        operation.Description = "Obtiene un item específico por su ID";
-        return Task.CompletedTask;
-    });
-
-    app.MapPost("/todos", async (TodoItem todo, AppDbContext db) =>
-    {
-        db.TodoItems.Add(todo);
-        await db.SaveChangesAsync();
-        return Results.Created($"/todos/{todo.Id}", todo);
-    })
-    .WithName("CreateTodo")
-    .AddOpenApiOperationTransformer((operation, context, ct) =>
-    {
-        operation.Summary = "CreateTodo";
-        operation.Description = "Crea un nuevo item en la lista de tareas";
-        return Task.CompletedTask;
-    });
-
-    app.MapPut("/todos/{id}", async (int id, TodoItem updatedTodo, AppDbContext db) =>
-    {
-        var todo = await db.TodoItems.FindAsync(id);
-        if (todo is null) return Results.NotFound();
-
-        todo.Title = updatedTodo.Title;
-        todo.IsCompleted = updatedTodo.IsCompleted;
-        await db.SaveChangesAsync();
-
-        return Results.Ok(todo);
-    })
-    .WithName("UpdateTodo")
-    .AddOpenApiOperationTransformer((operation, context, ct) =>
-    {
-        operation.Summary = "UpdateTodo";
-        operation.Description = "Actualiza un item existente";
-        return Task.CompletedTask;
-    });
-
-    app.MapDelete("/todos/{id}", async (int id, AppDbContext db) =>
-    {
-        var todo = await db.TodoItems.FindAsync(id);
-        if (todo is null) return Results.NotFound();
-
-        db.TodoItems.Remove(todo);
-        await db.SaveChangesAsync();
-
-        return Results.NoContent();
-    })
-    .WithName("DeleteTodo")
-    .AddOpenApiOperationTransformer((operation, context, ct) =>
-    {
-        operation.Summary = "DeleteTodo";
-        operation.Description = "Elimina un item de la lista de tareas";
         return Task.CompletedTask;
     });
 
@@ -185,38 +102,8 @@ app.MapGet("/call-fastapi", async (IHttpClientFactory factory, StackExchange.Red
     return Task.CompletedTask;
 });
 
-// Endpoint de diagnóstico para ver las configuraciones disponibles
-app.MapGet("/debug/config", (IConfiguration configuration) =>
-{
-    var allConfigs = new Dictionary<string, string>();
 
-    // Obtener todas las claves de configuración relacionadas con servicios
-    foreach (var item in configuration.AsEnumerable())
-    {
-        if (item.Key.Contains("fastapi", StringComparison.OrdinalIgnoreCase) || 
-            item.Key.Contains("services", StringComparison.OrdinalIgnoreCase) ||
-            item.Key.Contains("ConnectionStrings", StringComparison.OrdinalIgnoreCase))
-        {
-            allConfigs[item.Key] = item.Value ?? "null";
-        }
-    }
-
-    return Results.Ok(new
-    {
-        message = "Configuraciones disponibles relacionadas con fastapi",
-        configurations = allConfigs,
-        timestamp = DateTime.UtcNow
-    });
-})
-.WithName("DebugConfig")
-.AddOpenApiOperationTransformer((operation, context, ct) =>
-{
-    operation.Summary = "DebugConfig";
-    operation.Description = "Muestra las configuraciones disponibles para debugging";
-    return Task.CompletedTask;
-});
-
-app.MapDelete("/cache/clear", async (StackExchange.Redis.IConnectionMultiplexer redis) =>
+app.MapDelete("/cache/clear", async (IConnectionMultiplexer redis) =>
 {
     var db = redis.GetDatabase();
     await db.KeyDeleteAsync("fastapi:hello-world");
