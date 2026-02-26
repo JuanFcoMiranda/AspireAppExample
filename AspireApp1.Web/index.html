@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AspireApp1 Web</title>
+    <!-- Script para recibir variables de entorno de Aspire -->
+    <script type="text/typescript">
+      // Aspire inyectará estas variables automáticamente
+      // Si no están disponibles, se usarán las de import.meta.env
+      window.OTEL_EXPORTER_OTLP_ENDPOINT = window.OTEL_EXPORTER_OTLP_ENDPOINT || undefined;
+      window.OTEL_SERVICE_NAME = window.OTEL_SERVICE_NAME || undefined;
+      window.OTEL_SERVICE_VERSION = window.OTEL_SERVICE_VERSION || undefined;
+    </script>
   </head>
   <body>
     <div id="app"></div>

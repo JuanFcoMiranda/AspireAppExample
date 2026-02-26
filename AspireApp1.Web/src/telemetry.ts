@@ -1,60 +1,112 @@
 import { WebTracerProvider } from '@opentelemetry/sdk-trace-web';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { Resource } from '@opentelemetry/resources';
+import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
-import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
-import { XMLHttpRequestInstrumentation } from '@opentelemetry/instrumentation-xml-http-request';
+import { UserInteractionInstrumentation } from '@opentelemetry/instrumentation-user-interaction';
+import { trace } from '@opentelemetry/api';
 
+/**
+ * Inicializa OpenTelemetry para enviar trazas al Dashboard de Aspire
+ * vía proxy en dotnet-api
+ */
 export function initTelemetry() {
-  try {
-    console.log('🔧 Inicializando OpenTelemetry...');
+    try {
+        // Obtener la URL base del API desde window (configurada por Aspire)
+        const apiBaseUrl = (window as any).API_BASE_URL || 'http://localhost:5000';
 
-    // Obtener configuración del endpoint OTLP desde las variables de entorno
-    const otlpEndpoint = import.meta.env.VITE_OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:18889/v1/traces';
+        // El proxy en dotnet-api que reenvía al Dashboard de Aspire
+        const proxyEndpoint = `${apiBaseUrl}/api/telemetry/traces`;
 
-    // Configurar el exportador OTLP
-    const exporter = new OTLPTraceExporter({
-      url: otlpEndpoint,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    console.log('✓ OTLPTraceExporter creado');
+        console.log('🔧 Inicializando OpenTelemetry');
+        console.log(`   → Proxy: ${proxyEndpoint}`);
+        console.log(`   → Service: web`);
 
-    // Crear el procesador de spans
-    const spanProcessor = new BatchSpanProcessor(exporter);
-    console.log('✓ BatchSpanProcessor creado');
+        // Crear recurso con información del servicio
+        const resource = new Resource({
+            [ATTR_SERVICE_NAME]: 'web',
+            [ATTR_SERVICE_VERSION]: '1.0.0',
+        });
 
-    // Configurar el proveedor de trazas con el span processor
-    // Nueva forma recomendada: pasar spanProcessors en el constructor
-    const provider = new WebTracerProvider({
-      spanProcessors: [spanProcessor],
-    });
-    console.log('✓ WebTracerProvider creado con spanProcessors');
+        // Configurar exportador OTLP HTTP
+        const exporter = new OTLPTraceExporter({
+            url: proxyEndpoint,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            timeoutMillis: 10000,
+        });
 
-    // Registrar el proveedor globalmente
-    provider.register();
-    console.log('✓ Provider registrado');
+        // Configurar procesador de spans
+        const spanProcessor = new BatchSpanProcessor(exporter, {
+            maxQueueSize: 2048,
+            maxExportBatchSize: 512,
+            scheduledDelayMillis: 2000, // Enviar cada 2 segundos
+        });
 
-    // Registrar instrumentaciones automáticas
-    registerInstrumentations({
-      instrumentations: [
-        new FetchInstrumentation({
-          propagateTraceHeaderCorsUrls: [/.*/],
-          clearTimingResources: true,
-        }),
-        new XMLHttpRequestInstrumentation({
-          propagateTraceHeaderCorsUrls: [/.*/],
-          clearTimingResources: true,
-        }),
-      ],
-    });
-    console.log('✓ Instrumentaciones registradas');
+        // Crear proveedor de trazas
+        const provider = new WebTracerProvider({
+            resource: resource,
+            spanProcessors: [spanProcessor],
+        });
 
-    console.log('✅ OpenTelemetry inicializado correctamente');
-    console.log('📡 Endpoint OTLP:', otlpEndpoint);
-  } catch (error) {
-    console.error('❌ Error al inicializar OpenTelemetry:', error);
-    console.error('Stack:', (error as Error).stack);
-  }
+        // Registrar el proveedor globalmente
+        provider.register();
+
+        // Registrar instrumentación de interacciones del usuario (clicks, etc.)
+        registerInstrumentations({
+            instrumentations: [
+                new UserInteractionInstrumentation({
+                    eventNames: ['click', 'submit'],
+                    shouldPreventSpanCreation: (eventType, element, span) => {
+                        // No crear spans para clicks en html/body
+                        const tagName = element.tagName.toLowerCase();
+                        if (tagName === 'html' || tagName === 'body') {
+                            return true;
+                        }
+                        return false;
+                    },
+                }),
+            ],
+        });
+
+        console.log('✅ OpenTelemetry configurado correctamente');
+        console.log('   → Instrumentación de clicks activa');
+        console.log('   → Las trazas se enviarán al Dashboard de Aspire');
+
+        // Crear traza inicial
+        const tracer = trace.getTracer('web', '1.0.0');
+        const span = tracer.startSpan('app-loaded');
+        span.setAttribute('url', window.location.href);
+        span.end();
+
+        console.log('✅ Traza inicial enviada');
+
+        return provider;
+
+    } catch (error) {
+        console.error('❌ Error al inicializar OpenTelemetry:', error);
+        return null;
+    }
+}
+
+/**
+ * Helper para crear trazas manuales desde componentes Vue
+ */
+export function trackButtonClick(buttonName: string, properties?: Record<string, any>) {
+    const tracer = trace.getTracer('web', '1.0.0');
+    const span = tracer.startSpan(`button-click: ${buttonName}`);
+
+    span.setAttribute('button.name', buttonName);
+    span.setAttribute('component', 'vue');
+
+    if (properties) {
+        Object.entries(properties).forEach(([key, value]) => {
+            span.setAttribute(key, String(value));
+        });
+    }
+
+    span.end();
+    console.log(`📊 Traza enviada: button-click: ${buttonName}`);
 }

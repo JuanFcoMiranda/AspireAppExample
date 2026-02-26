@@ -3,39 +3,32 @@ import os
 
 import uvicorn
 from fastapi import FastAPI
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
 
 from telemetry import configure_telemetry
 
-service_name = os.getenv("SERVICE_NAME", "fastapi")
+# Obtener el nombre del servicio desde variables de entorno
+service_name = os.getenv("OTEL_SERVICE_NAME") or os.getenv("SERVICE_NAME", "fastapi")
 
-resource = Resource.create({"service.name": service_name})
-provider = TracerProvider(resource=resource)
+# Crear la aplicación FastAPI
+app = FastAPI(title=service_name)
 
-app = FastAPI()
-FastAPIInstrumentor.instrument_app(app, tracer_provider=provider)
-
-# Configure telemetry for a standalone dashboard
+# Configurar telemetría (OpenTelemetry + Aspire)
+# Esto configura TracerProvider, MeterProvider, LoggerProvider e instrumenta FastAPI
 tracer = configure_telemetry(app, service_name=service_name)
+
+# Logger estándar de Python (se envía automáticamente a OpenTelemetry)
 logger = logging.getLogger(__name__)
 
 @app.get("/hello-world")
-async def hello():
+async def hello(msg: str = None):
     logger.info("hello-world endpoint called")
+    print(msg)
     return {"message": "Hola desde FastAPI"}
 
 @app.get("/health")
 async def health():
     logger.info("Health check called")
     return {"status": "ok"}
-
-@app.get("/simulate-error")
-async def simulate_error():
-    logger.warning("This is a simulated warning.")
-    logger.error("This is a simulated error.")
-    return {"message": "Simulated warning and error logs generated"}
 
 # Función de inicio que lee PORT del entorno
 def start():

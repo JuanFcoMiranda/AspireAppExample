@@ -26,6 +26,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+import { trackButtonClick, trackApiCall } from "./telemetry-helpers";
 
 const loadingHello = ref(false);
 const loadingFastApi = ref(false);
@@ -43,11 +44,15 @@ const request = async (
   response.value = "";
 
   try {
-    const res = await fetch(`${apiBaseUrl}${path}`);
-    if (!res.ok) {
-      throw new Error(`Request failed (${res.status})`);
-    }
-    const data = await res.json();
+    // Enviar telemetría de la llamada API
+    const data = await trackApiCall(path, 'GET', async () => {
+      const res = await fetch(`${apiBaseUrl}${path}`);
+      if (!res.ok) {
+        throw new Error(`Request failed (${res.status})`);
+      }
+      return res.json();
+    });
+
     response.value = JSON.stringify(data, null, 2);
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err);
@@ -56,7 +61,21 @@ const request = async (
   }
 };
 
-const loadHello = () => request("/hello", (value) => (loadingHello.value = value));
-const loadFastApi = () =>
+const loadHello = () => {
+  // Enviar telemetría del click del botón
+  trackButtonClick('load-hello', {
+    'button.action': 'load-api-data',
+    'api.endpoint': '/hello'
+  });
+  request("/hello", (value) => (loadingHello.value = value));
+};
+
+const loadFastApi = () => {
+  // Enviar telemetría del click del botón
+  trackButtonClick('load-fastapi', {
+    'button.action': 'load-api-data',
+    'api.endpoint': '/call-fastapi'
+  });
   request("/call-fastapi", (value) => (loadingFastApi.value = value));
+};
 </script>
